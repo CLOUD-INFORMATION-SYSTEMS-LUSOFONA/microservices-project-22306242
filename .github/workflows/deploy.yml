@@ -89,9 +89,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+
+      - name: Get runner public IP
+        id: ip
+        run: echo "ip=$(curl -s ifconfig.me)" >> $GITHUB_OUTPUT
+
+      - name: Add runner IP to security group
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ secrets.APP_SG_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr ${{ steps.ip.outputs.ip }}/32
+
       - name: Install Ansible
         run: |
-          pip install ansible
+          pip install "ansible==9.2.0"
           ansible-galaxy collection install community.docker
 
       - name: Setup SSH key
@@ -122,3 +140,12 @@ jobs:
 
       - name: Run Ansible playbook
         run: ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/deploy.yml
+
+      - name: Remove runner IP from security group
+        if: always()
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ secrets.APP_SG_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr ${{ steps.ip.outputs.ip }}/32
