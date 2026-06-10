@@ -1,17 +1,9 @@
-data "http" "my_ip" {
-  url = "https://api4.my-ip.io/ip.txt"
-}
-
 terraform {
   required_version = ">= 1.9"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
-    }
-    http = {
-      source  = "hashicorp/http"
-      version = ">= 3.0"
     }
   }
 
@@ -46,14 +38,14 @@ data "aws_ami" "amazon_linux" {
 }
 
 module "vpc" {
-  source              = "../../modules/vpc"
-  vpc_name            = "microservices-dev"
-  vpc_cidr            = "10.0.0.0/16"
-  public_subnet_cidr  = "10.0.1.0/24"
+  source                = "../../modules/vpc"
+  vpc_name              = "microservices-dev"
+  vpc_cidr              = "10.0.0.0/16"
+  public_subnet_cidr    = "10.0.1.0/24"
   private_subnet_cidr_1 = "10.0.2.0/24"
   private_subnet_cidr_2 = "10.0.3.0/24"
-  az_1                = "us-east-1a"
-  az_2                = "us-east-1b"
+  az_1                  = "us-east-1a"
+  az_2                  = "us-east-1b"
 }
 
 module "compute" {
@@ -63,7 +55,6 @@ module "compute" {
   ami_id        = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
   key_name      = var.key_name
-  allowed_ssh_cidr = "${chomp(data.http.my_ip.response_body)}/32"
   user_data_script = <<-EOF
     #!/bin/bash
     yum update -y
@@ -78,6 +69,7 @@ module "compute" {
     echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
   EOF
 }
+
 module "db" {
   source             = "../../modules/db"
   vpc_id             = module.vpc.vpc_id
