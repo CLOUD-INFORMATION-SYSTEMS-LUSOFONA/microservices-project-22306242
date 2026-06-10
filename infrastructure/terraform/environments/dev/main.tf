@@ -1,9 +1,17 @@
+data "http" "my_ip" {
+  url = "https://api4.my-ip.io/ip.txt"
+}
+
 terraform {
   required_version = ">= 1.9"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = ">= 3.0"
     }
   }
 
@@ -55,6 +63,7 @@ module "compute" {
   ami_id        = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
   key_name      = var.key_name
+  allowed_ssh_cidr = "${chomp(data.http.my_ip.response_body)}/32"
   user_data_script = <<-EOF
     #!/bin/bash
     yum update -y
