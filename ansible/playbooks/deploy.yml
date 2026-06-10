@@ -1,0 +1,134 @@
+---
+- name: Install Docker on all hosts
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
+
+    - name: Start and enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: Install Python pip
+      yum:
+        name: python3-pip
+        state: present
+
+    - name: Install compatible urllib3
+      pip:
+        name: "urllib3<2.0"
+        state: present
+
+    - name: Install Python requests library
+      pip:
+        name: requests
+        state: present
+
+- name: Deploy user-service
+  hosts: user_service
+  become: yes
+  vars:
+    rds_host: microservices-db.ce5qq8css0r0.us-east-1.rds.amazonaws.com
+  tasks:
+    - name: Run user-service
+      community.docker.docker_container:
+        name: user-service
+        image: goncfsoares/user-service:latest
+        state: started
+        restart_policy: always
+        pull: yes
+        ports:
+          - "8081:8081"
+        env:
+          JAVA_TOOL_OPTIONS: "-Xmx512m -Xms256m"
+          SPRING_DATASOURCE_URL: "jdbc:postgresql://{{ rds_host }}:5432/microservicesdb"
+          SPRING_DATASOURCE_USERNAME: "dbadmin"
+          SPRING_DATASOURCE_PASSWORD: "Admin1234!"
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: "org.postgresql.Driver"
+          SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+
+- name: Deploy product-service
+  hosts: product_service
+  become: yes
+  vars:
+    rds_host: microservices-db.ce5qq8css0r0.us-east-1.rds.amazonaws.com
+    sqs_url: https://sqs.us-east-1.amazonaws.com/022112164063/microservices-dev-orders
+  tasks:
+    - name: Run product-service
+      community.docker.docker_container:
+        name: product-service
+        image: goncfsoares/product-service:latest
+        state: started
+        restart_policy: always
+        pull: yes
+        ports:
+          - "8082:8082"
+        env:
+          JAVA_TOOL_OPTIONS: "-Xmx512m -Xms256m"
+          SPRING_DATASOURCE_URL: "jdbc:postgresql://{{ rds_host }}:5432/microservicesdb"
+          SPRING_DATASOURCE_USERNAME: "dbadmin"
+          SPRING_DATASOURCE_PASSWORD: "Admin1234!"
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: "org.postgresql.Driver"
+          SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+          CLOUD_SQS_PRODUCT_EVENTS_ENABLED: "true"
+          CLOUD_SQS_PRODUCT_EVENTS_QUEUE_URL: "{{ sqs_url }}"
+          CLOUD_SQS_PRODUCT_EVENTS_REGION: "us-east-1"
+
+- name: Deploy order-service
+  hosts: order_service
+  become: yes
+  vars:
+    rds_host: microservices-db.ce5qq8css0r0.us-east-1.rds.amazonaws.com
+    sqs_url: https://sqs.us-east-1.amazonaws.com/022112164063/microservices-dev-orders
+  tasks:
+    - name: Run order-service
+      community.docker.docker_container:
+        name: order-service
+        image: goncfsoares/order-service:latest
+        state: started
+        restart_policy: always
+        pull: yes
+        ports:
+          - "8083:8083"
+        env:
+          JAVA_TOOL_OPTIONS: "-Xmx512m -Xms256m"
+          SPRING_DATASOURCE_URL: "jdbc:postgresql://{{ rds_host }}:5432/microservicesdb"
+          SPRING_DATASOURCE_USERNAME: "dbadmin"
+          SPRING_DATASOURCE_PASSWORD: "Admin1234!"
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: "org.postgresql.Driver"
+          SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+          SERVICES_USER_URL: "http://100.54.132.250:8081"
+          SERVICES_PRODUCT_URL: "http://18.207.100.154:8082"
+          CLOUD_SQS_PRODUCT_EVENTS_CONSUMER_ENABLED: "true"
+          CLOUD_SQS_PRODUCT_EVENTS_CONSUMER_QUEUE_URL: "{{ sqs_url }}"
+          CLOUD_SQS_PRODUCT_EVENTS_CONSUMER_REGION: "us-east-1"
+
+- name: Deploy api-gateway
+  hosts: gateway
+  become: yes
+  tasks:
+    - name: Run api-gateway
+      community.docker.docker_container:
+        name: api-gateway
+        image: goncfsoares/api-gateway:latest
+        state: started
+        restart_policy: always
+        pull: yes
+        ports:
+          - "8080:8080"
+        env:
+          JAVA_TOOL_OPTIONS: "-Xmx512m -Xms256m"
+          SERVICES_USER_URL: "http://100.54.132.250:8081"
+          SERVICES_PRODUCT_URL: "http://18.207.100.154:8082"
+          SERVICES_ORDER_URL: "http://44.192.40.34:8083"

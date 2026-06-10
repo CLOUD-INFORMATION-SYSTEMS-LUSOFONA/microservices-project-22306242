@@ -54,3 +54,9 @@ logs/
 # Service PIDs
 .service-pids
 
+
+terraform.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+*.pem
