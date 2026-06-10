@@ -140,7 +140,9 @@ jobs:
 
       - name: Run Ansible playbook
         run: ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/deploy.yml
-
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          
       - name: Remove runner IP from security group
         if: always()
         run: |
